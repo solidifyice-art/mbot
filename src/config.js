@@ -8,6 +8,11 @@ const DEFAULTS = Object.freeze({
   JUMP_GAP_MS: 1000,
   JUMP_DURATION_MS: 200,
   INVENTORY_CHECK_INTERVAL_MS: 60 * 1000,
+  ANTI_AFK_INTERVAL_MS: 2 * 60 * 1000,
+  ANTI_AFK_MOVE_DURATION_MIN_MS: 1000,
+  ANTI_AFK_MOVE_DURATION_MAX_MS: 2000,
+  ANTI_AFK_LOOK_AROUND_CHANCE: 0.4,
+  ANTI_AFK_JUMP_CHANCE: 0.3,
   RECONNECT_ENABLED: true,
   RECONNECT_INITIAL_MS: 5000,
   RECONNECT_MAX_MS: 5 * 60 * 1000,
@@ -130,6 +135,30 @@ function parseConfig(env = {}) {
       intervalMs: readInteger(env, 'INVENTORY_CHECK_INTERVAL_MS', {
         defaultValue: DEFAULTS.INVENTORY_CHECK_INTERVAL_MS,
         min: 0,
+      }),
+    },
+    antiAfk: {
+      intervalMs: readInteger(env, 'ANTI_AFK_INTERVAL_MS', {
+        defaultValue: DEFAULTS.ANTI_AFK_INTERVAL_MS,
+        min: 0,
+      }),
+      moveDurationMinMs: readInteger(env, 'ANTI_AFK_MOVE_DURATION_MIN_MS', {
+        defaultValue: DEFAULTS.ANTI_AFK_MOVE_DURATION_MIN_MS,
+        min: 100,
+      }),
+      moveDurationMaxMs: readInteger(env, 'ANTI_AFK_MOVE_DURATION_MAX_MS', {
+        defaultValue: DEFAULTS.ANTI_AFK_MOVE_DURATION_MAX_MS,
+        min: 100,
+      }),
+      lookAroundChance: readNumber(env, 'ANTI_AFK_LOOK_AROUND_CHANCE', {
+        defaultValue: DEFAULTS.ANTI_AFK_LOOK_AROUND_CHANCE,
+        min: 0,
+        max: 1,
+      }),
+      jumpChance: readNumber(env, 'ANTI_AFK_JUMP_CHANCE', {
+        defaultValue: DEFAULTS.ANTI_AFK_JUMP_CHANCE,
+        min: 0,
+        max: 1,
       }),
     },
     reconnect: {

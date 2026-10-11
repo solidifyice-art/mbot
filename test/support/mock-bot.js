@@ -66,6 +66,7 @@ function testConfig(overrides = {}) {
     },
     jump: { intervalMs: 1000, count: 2, gapMs: 1000, durationMs: 200 },
     inventory: { intervalMs: 60000 },
+    antiAfk: { intervalMs: 120000, moveDurationMinMs: 1000, moveDurationMaxMs: 2000, lookAroundChance: 0.4, jumpChance: 0.3 },
     reconnect: { enabled: true, initialMs: 1000, maxMs: 8000, factor: 2 },
     http: { enabled: false, port: 3000 },
     logLevel: 'error',

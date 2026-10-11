@@ -4,6 +4,7 @@ const mineflayer = require('mineflayer');
 const { ReconnectManager } = require('./reconnect');
 const { JumpScheduler } = require('./jump-scheduler');
 const { InventoryChecker } = require('./inventory');
+const { AntiAfk } = require('./anti-afk');
 const { createLogger } = require('./logger');
 
 function describeKick(reason) {
@@ -31,12 +32,14 @@ class BotManager {
     this.createBot = deps.createBot || mineflayer.createBot;
     this.JumpScheduler = deps.JumpScheduler || JumpScheduler;
     this.InventoryChecker = deps.InventoryChecker || InventoryChecker;
+    this.AntiAfk = deps.AntiAfk || AntiAfk;
     this.setTimeoutFn = deps.setTimeoutFn || setTimeout;
     this.clearTimeoutFn = deps.clearTimeoutFn || clearTimeout;
 
     this.bot = null;
     this.jumpScheduler = null;
     this.inventoryChecker = null;
+    this.antiAfk = null;
     this.listeners = null;
 
     this.started = false;
@@ -142,6 +145,7 @@ class BotManager {
       this.logger.info(`Bot spawned as "${bot.username || this.config.minecraft.username}".`);
       this.#startJumpScheduler(bot);
       this.#startInventoryChecker(bot);
+      this.#startAntiAfk(bot);
     };
     const onKicked = (reason) => {
       const text = describeKick(reason);
@@ -188,6 +192,11 @@ class BotManager {
     if (this.inventoryChecker) {
       this.inventoryChecker.stop();
       this.inventoryChecker = null;
+    }
+
+    if (this.antiAfk) {
+      this.antiAfk.stop();
+      this.antiAfk = null;
     }
 
     if (!bot) return;
@@ -238,6 +247,22 @@ class BotManager {
       logger: this.logger,
     });
     this.inventoryChecker.start();
+  }
+
+  #startAntiAfk(bot) {
+    if (this.config.antiAfk.intervalMs <= 0) return;
+    this.antiAfk = new this.AntiAfk({
+      bot,
+      intervalMs: this.config.antiAfk.intervalMs,
+      moveDurationMinMs: this.config.antiAfk.moveDurationMinMs,
+      moveDurationMaxMs: this.config.antiAfk.moveDurationMaxMs,
+      lookAroundChance: this.config.antiAfk.lookAroundChance,
+      jumpChance: this.config.antiAfk.jumpChance,
+      setTimeoutFn: this.setTimeoutFn,
+      clearTimeoutFn: this.clearTimeoutFn,
+      logger: this.logger,
+    });
+    this.antiAfk.start();
   }
 
   #scheduleReconnect(reason) {
