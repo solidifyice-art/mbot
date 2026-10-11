@@ -1,0 +1,19 @@
+{
+  "name": "minecraft-idle-bot",
+  "version": "1.0.0",
+  "description": "A production-ready idle Minecraft bot built with Node.js and Mineflayer, designed for GitHub and Render.",
+  "license": "MIT",
+  "main": "index.js",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "start": "node index.js",
+    "test": "node --test test/*.test.js",
+    "check": "node scripts/check.js"
+  },
+  "dependencies": {
+    "dotenv": "^16.4.5",
+    "mineflayer": "^4.39.0"
+  }
+}

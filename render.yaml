@@ -1,0 +1,44 @@
+# Render Blueprint for the Minecraft idle bot.
+#
+# This defines a Background Worker, which is the recommended deployment type for
+# a long-running process that does not need a public HTTP endpoint.
+#
+# NOTE: Render Background Workers require a paid instance type (they are not
+# available on the free plan). See the README for the Web Service alternative.
+#
+# Secret values use `sync: false`, which means Render will prompt you to enter
+# them in the dashboard instead of storing them in this file.
+
+services:
+  - type: worker
+    name: minecraft-idle-bot
+    runtime: node
+    plan: starter
+    buildCommand: npm ci
+    startCommand: npm start
+    autoDeploy: true
+    envVars:
+      - key: MC_HOST
+        sync: false
+      - key: MC_PORT
+        value: "25565"
+      - key: MC_USERNAME
+        sync: false
+      - key: MC_AUTH
+        value: "offline"
+      - key: JUMP_INTERVAL_MS
+        value: "300000"
+      - key: JUMP_COUNT
+        value: "3"
+      - key: JUMP_GAP_MS
+        value: "1000"
+      - key: JUMP_DURATION_MS
+        value: "200"
+      - key: RECONNECT_ENABLED
+        value: "true"
+      - key: RECONNECT_INITIAL_MS
+        value: "5000"
+      - key: RECONNECT_MAX_MS
+        value: "300000"
+      - key: LOG_LEVEL
+        value: "info"
