@@ -1,5 +1,6 @@
 'use strict';
 
+const { EventEmitter } = require('events');
 const mineflayer = require('mineflayer');
 const { ReconnectManager } = require('./reconnect');
 const { JumpScheduler } = require('./jump-scheduler');
@@ -25,8 +26,9 @@ function describeKick(reason) {
  * Owns the Mineflayer connection lifecycle: exactly one bot instance at a time,
  * graceful teardown, scheduled reconnects and the idle jump routine.
  */
-class BotManager {
+class BotManager extends EventEmitter {
   constructor(config, deps = {}) {
+    super();
     this.config = config;
     this.logger = deps.logger || createLogger('info');
     this.createBot = deps.createBot || mineflayer.createBot;
@@ -45,6 +47,8 @@ class BotManager {
     this.started = false;
     this.shuttingDown = false;
     this.state = 'idle';
+    this.jumpEnabled = config.jump.intervalMs > 0;
+    this.antiAfkEnabled = config.antiAfk.intervalMs > 0;
     this.connectedAt = null;
     this.connectionAttempts = 0;
     this.lastDisconnectReason = null;
@@ -83,6 +87,34 @@ class BotManager {
     this.logger.info('Bot manager stopped.');
   }
 
+  getBot() {
+    return this.bot;
+  }
+
+  setJumpEnabled(enabled) {
+    this.jumpEnabled = !!enabled;
+    if (this.jumpScheduler) {
+      this.jumpScheduler.stop();
+      this.jumpScheduler = null;
+    }
+    if (this.jumpEnabled && this.bot) {
+      this.#startJumpScheduler(this.bot);
+    }
+    return this.jumpEnabled;
+  }
+
+  setAntiAfkEnabled(enabled) {
+    this.antiAfkEnabled = !!enabled;
+    if (this.antiAfk) {
+      this.antiAfk.stop();
+      this.antiAfk = null;
+    }
+    if (this.antiAfkEnabled && this.bot) {
+      this.#startAntiAfk(this.bot);
+    }
+    return this.antiAfkEnabled;
+  }
+
   getStatus() {
     return {
       state: this.state,
@@ -91,6 +123,8 @@ class BotManager {
       reconnectPending: this.reconnect.pending,
       lastDisconnectReason: this.lastDisconnectReason,
       connectedForMs: this.connectedAt ? Date.now() - this.connectedAt : null,
+      jumpEnabled: this.jumpEnabled,
+      antiAfkEnabled: this.antiAfkEnabled,
     };
   }
 
@@ -146,6 +180,7 @@ class BotManager {
       this.#startJumpScheduler(bot);
       this.#startInventoryChecker(bot);
       this.#startAntiAfk(bot);
+      this.emit('spawn', bot);
     };
     const onKicked = (reason) => {
       const text = describeKick(reason);
@@ -177,6 +212,7 @@ class BotManager {
     this.connectedAt = null;
     if (!this.lastDisconnectReason) this.lastDisconnectReason = reason;
     this.#setState('disconnected');
+    this.emit('end', reason);
     this.#scheduleReconnect(reason);
   }
 
@@ -224,6 +260,7 @@ class BotManager {
   }
 
   #startJumpScheduler(bot) {
+    if (!this.jumpEnabled || this.jumpScheduler) return;
     this.jumpScheduler = new this.JumpScheduler({
       bot,
       intervalMs: this.config.jump.intervalMs,
@@ -238,7 +275,7 @@ class BotManager {
   }
 
   #startInventoryChecker(bot) {
-    if (this.config.inventory.intervalMs <= 0) return;
+    if (this.config.inventory.intervalMs <= 0 || this.inventoryChecker) return;
     this.inventoryChecker = new this.InventoryChecker({
       bot,
       intervalMs: this.config.inventory.intervalMs,
@@ -250,7 +287,7 @@ class BotManager {
   }
 
   #startAntiAfk(bot) {
-    if (this.config.antiAfk.intervalMs <= 0) return;
+    if (!this.antiAfkEnabled || this.config.antiAfk.intervalMs <= 0 || this.antiAfk) return;
     this.antiAfk = new this.AntiAfk({
       bot,
       intervalMs: this.config.antiAfk.intervalMs,

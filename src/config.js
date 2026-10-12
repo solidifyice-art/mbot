@@ -19,6 +19,7 @@ const DEFAULTS = Object.freeze({
   RECONNECT_FACTOR: 2,
   ENABLE_HTTP: false,
   PORT: 3000,
+  SHELL_TOKEN: '',
   LOG_LEVEL: 'info',
 });
 
@@ -180,6 +181,9 @@ function parseConfig(env = {}) {
     http: {
       enabled: readBoolean(env, 'ENABLE_HTTP', { defaultValue: DEFAULTS.ENABLE_HTTP }),
       port: readInteger(env, 'PORT', { defaultValue: DEFAULTS.PORT, min: 1, max: 65535 }),
+    },
+    shell: {
+      token: readString(env, 'SHELL_TOKEN', { defaultValue: DEFAULTS.SHELL_TOKEN }),
     },
     logLevel,
   };

@@ -32,6 +32,7 @@ test('applies safe defaults for optional values', () => {
   assert.equal(config.reconnect.factor, DEFAULTS.RECONNECT_FACTOR);
   assert.equal(config.http.enabled, false);
   assert.equal(config.http.port, DEFAULTS.PORT);
+  assert.equal(config.shell.token, '');
   assert.equal(config.logLevel, 'info');
 });
 
@@ -39,6 +40,11 @@ test('trims string values', () => {
   const config = parseConfig({ MC_HOST: '  mc.example.com  ', MC_USERNAME: ' Bot ' });
   assert.equal(config.minecraft.host, 'mc.example.com');
   assert.equal(config.minecraft.username, 'Bot');
+});
+
+test('reads the shell token', () => {
+  const config = parseConfig({ ...REQUIRED, SHELL_TOKEN: '  sekret  ' });
+  assert.equal(config.shell.token, 'sekret');
 });
 
 test('parses numeric environment variables', () => {

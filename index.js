@@ -5,6 +5,8 @@ require('dotenv').config();
 const { parseConfig } = require('./src/config');
 const { createLogger } = require('./src/logger');
 const { BotManager } = require('./src/bot');
+const { BotActions } = require('./src/actions');
+const { BotShell } = require('./src/shell');
 const { createHealthServer } = require('./src/server');
 
 function main() {
@@ -34,11 +36,19 @@ function main() {
 
   const botManager = new BotManager(config, { logger });
 
+  const actions = new BotActions({ getBot: () => botManager.getBot(), logger });
+  const shell = new BotShell({ manager: botManager, actions, logger });
+
   let httpServer = null;
   if (config.http.enabled) {
-    httpServer = createHealthServer({ botManager, logger });
+    httpServer = createHealthServer({ botManager, logger, shell, token: config.shell.token });
     httpServer.listen(config.http.port, '0.0.0.0', () => {
       logger.info(`Health endpoint listening on port ${config.http.port} (/health).`);
+      if (httpServer.shellEnabled) {
+        logger.info('Bot shell enabled (POST /shell, GET /status, GET /map, GET /feed, WS /ws).');
+      } else {
+        logger.warn('Bot shell disabled: set SHELL_TOKEN to enable remote control.');
+      }
     });
   }
 
@@ -55,7 +65,7 @@ function main() {
     }
 
     if (httpServer) {
-      await new Promise((resolve) => httpServer.close(() => resolve()));
+      await httpServer.shutdown();
       logger.info('HTTP server closed.');
     }
 

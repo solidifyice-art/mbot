@@ -15,7 +15,10 @@ free host awake artificially. Use it responsibly and follow each server's rules.
 - Configurable Minecraft connection (host, port, username, protocol version, auth).
 - Offline-mode friendly (default `MC_AUTH=offline`).
 - Idle by default with a periodic, configurable jump routine.
+- Anti-AFK random movement (walk bursts, look around, occasional jumps).
 - Periodic inventory reporting: logs every non-empty stack (name, count, enchantments).
+- Remote **bot shell** over HTTP + WebSocket: status, ASCII map, chat, commands,
+  block break/place, creative item grants, and live toggles for walking/jumping.
 - Exponential-backoff reconnection with a single reconnect timer.
 - Graceful shutdown on `SIGINT` / `SIGTERM`.
 - Optional minimal HTTP health endpoint for Render Web Service deployments.
@@ -65,12 +68,18 @@ on Render they come from the service's environment settings. **Never commit `.en
 | `JUMP_GAP_MS`         | no       | `1000`    | Approximate spacing between jump presses.                          |
 | `JUMP_DURATION_MS`    | no       | `200`     | How long the jump control is held per jump.                        |
 | `INVENTORY_CHECK_INTERVAL_MS` | no | `60000` | How often to log the inventory summary. `0` disables.            |
+| `ANTI_AFK_INTERVAL_MS`| no       | `120000`  | Random movement interval. `0` disables anti-AFK.                   |
+| `ANTI_AFK_MOVE_DURATION_MIN_MS` | no | `1000` | Shortest movement burst.                                          |
+| `ANTI_AFK_MOVE_DURATION_MAX_MS` | no | `2000` | Longest movement burst.                                           |
+| `ANTI_AFK_LOOK_AROUND_CHANCE` | no | `0.4` | Chance (0-1) to look around after moving.                          |
+| `ANTI_AFK_JUMP_CHANCE`| no       | `0.3`     | Chance (0-1) to jump after moving.                                 |
 | `RECONNECT_ENABLED`   | no       | `true`    | Enable automatic reconnection.                                     |
 | `RECONNECT_INITIAL_MS`| no       | `5000`    | First reconnect delay.                                             |
 | `RECONNECT_MAX_MS`    | no       | `300000`  | Maximum reconnect delay.                                           |
 | `RECONNECT_FACTOR`    | no       | `2`       | Backoff multiplier per failed attempt.                             |
-| `ENABLE_HTTP`         | no       | `false`   | Enable the HTTP health endpoint (Web Service only).                |
-| `PORT`                | no       | `3000`    | Health endpoint port (Render sets this automatically).             |
+| `ENABLE_HTTP`         | no       | `false`   | Enable the HTTP endpoint + bot shell (Web Service only).           |
+| `PORT`                | no       | `3000`    | Endpoint port (Render sets this automatically).                    |
+| `SHELL_TOKEN`         | no       | —         | Secret enabling the remote bot shell. Blank = shell disabled.      |
 | `LOG_LEVEL`           | no       | `info`    | `debug`, `info`, `warn`, or `error`.                               |
 
 Invalid values (bad numbers, out-of-range ports, `RECONNECT_MAX_MS` below
@@ -247,6 +256,16 @@ Read logs in Render under your service's **Logs** tab, or locally in your termin
 4. Every pending jump timer is cancelled on disconnect and shutdown. The routine
    resumes from a fresh five-minute wait after a successful reconnection.
 
+**Anti-AFK**
+
+1. Every `ANTI_AFK_INTERVAL_MS` (default two minutes) the bot moves in a random
+   direction for a short random burst (`ANTI_AFK_MOVE_DURATION_MIN_MS` ..
+   `ANTI_AFK_MOVE_DURATION_MAX_MS`), then releases the control.
+2. It randomly looks around (`ANTI_AFK_LOOK_AROUND_CHANCE`) and randomly jumps
+   (`ANTI_AFK_JUMP_CHANCE`).
+3. This keeps the position changing so servers that kick for inactivity reset their
+   timer. Set `ANTI_AFK_INTERVAL_MS=0` to disable, or toggle it live with the shell.
+
 **Reconnection**
 
 1. On an unexpected disconnect, the bot waits `RECONNECT_INITIAL_MS` and retries.
@@ -258,7 +277,48 @@ Read logs in Render under your service's **Logs** tab, or locally in your termin
 
 ---
 
-## 10. Host restrictions, auth, and availability
+## 10. Remote bot shell (bsh)
+
+When `ENABLE_HTTP=true` **and** `SHELL_TOKEN` is set, the bot exposes a remote shell so
+you can inspect and control it from anywhere (for example your Render URL). Every shell
+route requires the token. Without `SHELL_TOKEN` the routes return `403`, so the endpoint
+is never open by accident.
+
+| Route     | Method    | Description                                                       |
+| --------- | --------- | ---------------------------------------------------------------- |
+| `/health` | GET       | Process + bot health (public, no secrets).                        |
+| `/status` | GET       | Manager status plus bot detail (position, gamemode, health, ...). |
+| `/map`    | GET       | ASCII surface map. Query `?radius=8`.                             |
+| `/feed`   | GET       | Recent chat/event feed. Query `?count=20`.                        |
+| `/shell`  | POST      | Run a command. Body `{"command":"where"}`.                        |
+| `/ws`     | WebSocket | Live feed + interactive commands.                                |
+
+Pass the token as `?token=…`, the `x-shell-token` header, or `Authorization: Bearer …`.
+
+```bash
+BASE=https://your-service.onrender.com
+curl "$BASE/status?token=$SHELL_TOKEN"
+curl -X POST "$BASE/shell?token=$SHELL_TOKEN" \
+  -H 'Content-Type: application/json' -d '{"command":"where"}'
+curl "$BASE/map?token=$SHELL_TOKEN&radius=8"
+```
+
+**Commands:** `status`, `where`, `map [radius]`, `inv`, `players`, `gamemode`,
+`give <item> [count]` (creative only), `break <x> <y> <z>`, `place <x> <y> <z> [item]`,
+`say <message>`, `cmd <command>`, `walk on|off`, `jump on|off`, `jumps`, `feed [n]`,
+`clear`, `help`.
+
+**WebSocket:** connect to `wss://your-service.onrender.com/ws?token=$SHELL_TOKEN`. The
+server sends `{type:"hello", feed:[…]}` on connect, `{type:"feed", entry}` for each new
+chat/event, and `{type:"output", ok, output}` per command. Send commands as
+`{"command":"where"}` (or a bare string).
+
+> **Security:** the token is the only gate — treat the endpoint as an admin interface,
+> use a long random value, and remember everything you send is visible on the server.
+
+---
+
+## 11. Host restrictions, auth, and availability
 
 - **Offline mode is not universal.** `MC_AUTH=offline` works on servers with
   `online-mode=false`. Online-mode servers require a valid Microsoft/Mojang account,
@@ -272,7 +332,7 @@ Read logs in Render under your service's **Logs** tab, or locally in your termin
 
 ---
 
-## 11. Project structure
+## 12. Project structure
 
 ```
 index.js                 Application entry point, signal handling
@@ -281,8 +341,12 @@ src/
   config.js              Environment parsing and validation
   reconnect.js           Exponential backoff + single-timer reconnect manager
   jump-scheduler.js      Periodic jump scheduling and cancellation
+  anti-afk.js            Random movement to avoid AFK kicks
   inventory.js           Periodic inventory summary logging
-  server.js              Optional HTTP health endpoint
+  actions.js             Break/place blocks, chat, gamemode, creative grants
+  gameplay.js            Status + ASCII surface map
+  shell.js               Remote bot shell (command parsing, feed, live toggles)
+  server.js              HTTP health endpoint + shell API + WebSocket
   logger.js              Timestamped console logger
 scripts/
   check.js               Static syntax check used by `npm run check`
